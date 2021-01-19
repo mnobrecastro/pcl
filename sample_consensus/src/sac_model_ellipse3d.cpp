@@ -2,7 +2,6 @@
  * Software License Agreement (BSD License)
  *
  *  Point Cloud Library (PCL) - www.pointclouds.org
- *  Copyright (c) 2009, Willow Garage, Inc.
  *  Copyright (c) 2012-, Open Perception, Inc.
  *
  *  All rights reserved.
@@ -34,35 +33,18 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id$
- *
  */
 
-#pragma once
+#include <pcl/sample_consensus/impl/sac_model_ellipse3d.hpp>
 
-namespace pcl
-{
-  enum SacModel
-  {
-    SACMODEL_PLANE,
-    SACMODEL_LINE,
-    SACMODEL_CIRCLE2D,
-    SACMODEL_CIRCLE3D,
-    SACMODEL_SPHERE,
-    SACMODEL_CYLINDER,
-    SACMODEL_CONE,
-    SACMODEL_TORUS,
-    SACMODEL_PARALLEL_LINE,
-    SACMODEL_PERPENDICULAR_PLANE,
-    SACMODEL_PARALLEL_LINES,
-    SACMODEL_NORMAL_PLANE,
-    SACMODEL_NORMAL_SPHERE,
-    SACMODEL_REGISTRATION,
-    SACMODEL_REGISTRATION_2D,
-    SACMODEL_PARALLEL_PLANE,
-    SACMODEL_NORMAL_PARALLEL_PLANE,
-    SACMODEL_STICK,
-//    SACMODEL_ELLIPSE2D,
-    SACMODEL_ELLIPSE3D
-  };
-}
+#ifndef PCL_NO_PRECOMPILE
+#include <pcl/impl/instantiate.hpp>
+#include <pcl/point_types.h>
+// Instantiations of specific point types
+#ifdef PCL_ONLY_CORE_POINT_TYPES
+  PCL_INSTANTIATE(SampleConsensusModelEllipse3D, (pcl::PointXYZ)(pcl::PointXYZI)(pcl::PointXYZRGBA)(pcl::PointXYZRGB)(pcl::PointXYZRGBNormal))
+#else
+  PCL_INSTANTIATE(SampleConsensusModelEllipse3D, PCL_XYZ_POINT_TYPES)
+#endif
+#endif    // PCL_NO_PRECOMPILE
+

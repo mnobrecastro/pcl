@@ -45,6 +45,8 @@
 #include <pcl/sample_consensus/sac_model_circle.h>
 #include <pcl/sample_consensus/sac_model_circle3d.h>
 #include <pcl/sample_consensus/sac_model_normal_sphere.h>
+//#include <pcl/sample_consensus/sac_model_ellipse.h>
+#include <pcl/sample_consensus/sac_model_ellipse3d.h>
 
 using namespace pcl;
 
@@ -54,6 +56,8 @@ using SampleConsensusModelCircle2DPtr = SampleConsensusModelCircle2D<PointXYZ>::
 using SampleConsensusModelCircle3DPtr = SampleConsensusModelCircle3D<PointXYZ>::Ptr;
 using SampleConsensusModelCylinderPtr = SampleConsensusModelCylinder<PointXYZ, Normal>::Ptr;
 using SampleConsensusModelNormalSpherePtr = SampleConsensusModelNormalSphere<PointXYZ, Normal>::Ptr;
+//using SampleConsensusModelEllipse2DPtr = SampleConsensusModelEllipse2D<PointXYZ>::Ptr;
+using SampleConsensusModelEllipse3DPtr = SampleConsensusModelEllipse3D<PointXYZ>::Ptr;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 TEST (SampleConsensusModelSphere, RANSAC)
@@ -648,6 +652,95 @@ TEST (SampleConsensusModelCircle3D, RANSAC)
   EXPECT_NEAR ( 0.0, coeff_refined[4], 1e-3);
   EXPECT_NEAR (-1.0, coeff_refined[5], 1e-3);
   EXPECT_NEAR ( 0.0, coeff_refined[6], 1e-3);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+TEST(SampleConsensusModelEllipse3D, RANSAC)
+{
+  srand(0);
+
+  // Using a custom point cloud on a tilted plane
+  PointCloud<PointXYZ> cloud;
+  cloud.resize(22);
+
+  cloud[ 0].getVector3fMap() << 0.9996, 5.0000, 2.9996;
+  cloud[ 1].getVector3fMap() << 0.6916, 5.0000, 2.9022;
+  cloud[ 2].getVector3fMap() << 0.4124, 5.0000, 2.6181;
+  cloud[ 3].getVector3fMap() << 0.1909, 5.0000, 2.1757;
+  cloud[ 4].getVector3fMap() << 0.0485, 5.0000, 1.6177;
+  cloud[ 5].getVector3fMap() << -0.0007, 5.0000, 0.9998;
+  cloud[ 6].getVector3fMap() << 0.0485, 5.0000, 0.3818;
+  cloud[ 7].getVector3fMap() << 0.1903, 5.0000, -0.1746;
+  cloud[ 8].getVector3fMap() << 0.4118, 5.0000, -0.6189;
+  cloud[ 9].getVector3fMap() << 0.6902, 5.0000, -0.9023;
+  cloud[10].getVector3fMap() << 1.0007, 5.0000, -0.9994;
+  cloud[11].getVector3fMap() << 1.3100, 5.0000, -0.9019;
+  cloud[12].getVector3fMap() << 1.5872, 5.0000, -0.6184;
+  cloud[13].getVector3fMap() << 1.8094, 5.0000, -0.1748;
+  cloud[14].getVector3fMap() << 1.9501, 5.0000, 0.3812;
+  cloud[15].getVector3fMap() << 2.0002, 5.0000, 0.9996;
+  cloud[16].getVector3fMap() << 1.9514, 5.0000, 1.6188;
+  cloud[17].getVector3fMap() << 1.8081, 5.0000, 2.1759;
+  cloud[18].getVector3fMap() << 1.5868, 5.0000, 2.6184;
+  cloud[19].getVector3fMap() << 1.3083, 5.0000, 2.9021;
+
+  cloud[20].getVector3fMap() << 0.85000002f, 4.8499999f, -3.1500001f;
+  cloud[21].getVector3fMap() << 1.15000000f, 5.1500001f, -2.8499999f;
+
+  // Create a shared 3d circle model pointer directly
+  SampleConsensusModelEllipse3DPtr model(
+      new SampleConsensusModelEllipse3D<PointXYZ>(cloud.makeShared()));
+
+  // Create the RANSAC object
+  RandomSampleConsensus<PointXYZ> sac(model, 0.03);
+
+  // Algorithm tests
+  bool result = sac.computeModel();
+  ASSERT_TRUE(result);
+
+  std::vector<int> sample;
+  sac.getModel(sample);
+  EXPECT_EQ(6, sample.size());
+
+  std::vector<int> inliers;
+  sac.getInliers(inliers);
+  EXPECT_EQ(20, inliers.size());
+
+  Eigen::VectorXf coeff;
+  sac.getModelCoefficients(coeff);
+  EXPECT_EQ(11, coeff.size());
+  EXPECT_NEAR(1.0, coeff[0], 1e-3);
+  EXPECT_NEAR(5.0, coeff[1], 1e-3);
+  EXPECT_NEAR(1.0, coeff[2], 1e-3);
+
+  EXPECT_NEAR(1.0, coeff[3], 1e-3);
+  EXPECT_NEAR(2.0, coeff[4], 1e-3);
+
+  EXPECT_NEAR(0.0, coeff[5], 1e-3);
+  EXPECT_NEAR(1.0, coeff[6], 1e-3);
+  EXPECT_NEAR(0.0, coeff[7], 1e-3);
+
+  EXPECT_NEAR(0.999, coeff[8], 1e-3); // ~=1.0
+  EXPECT_NEAR(0.0, coeff[9], 1e-3);
+  EXPECT_NEAR(-0.0284, coeff[10], 1e-3); // ~=0.0
+
+  Eigen::VectorXf coeff_refined;
+  model->optimizeModelCoefficients(inliers, coeff, coeff_refined);
+  EXPECT_EQ(11, coeff_refined.size());
+  EXPECT_NEAR(1.0, coeff_refined[0], 1e-3);
+  EXPECT_NEAR(5.0, coeff_refined[1], 1e-3);
+  EXPECT_NEAR(1.0, coeff_refined[2], 1e-3);
+
+  EXPECT_NEAR(1.0, coeff_refined[3], 1e-3);
+  EXPECT_NEAR(2.0, coeff_refined[4], 1e-3);
+
+  EXPECT_NEAR(0.0, coeff_refined[5], 1e-3);
+  EXPECT_NEAR(1.0, coeff_refined[6], 1e-3);
+  EXPECT_NEAR(0.0, coeff_refined[7], 1e-3);
+
+  EXPECT_NEAR(0.999, coeff_refined[8], 1e-3); // ~=1.0
+  EXPECT_NEAR(0.0, coeff_refined[9], 1e-3);
+  EXPECT_NEAR(-0.0284, coeff_refined[10], 1e-3); // ~=0.0
 }
 
 int
