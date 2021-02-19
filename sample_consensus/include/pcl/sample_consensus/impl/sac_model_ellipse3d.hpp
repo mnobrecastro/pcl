@@ -45,6 +45,9 @@
 #include <pcl/sample_consensus/sac_model_ellipse3d.h>
 #include <pcl/common/concatenate.h>
 
+#include <Eigen/Eigenvalues>
+#include <complex>
+
 //////////////////////////////////////////////////////////////////////////
 template <typename PointT> bool
 pcl::SampleConsensusModelEllipse3D<PointT>::isSampleGood (
@@ -56,34 +59,42 @@ pcl::SampleConsensusModelEllipse3D<PointT>::isSampleGood (
     return (false);
   }
   // Get the values at the three points
-  Eigen::Vector3d p0 ((*input_)[samples[0]].x, (*input_)[samples[0]].y, (*input_)[samples[0]].z);
-  Eigen::Vector3d p1 ((*input_)[samples[1]].x, (*input_)[samples[1]].y, (*input_)[samples[1]].z);
-  Eigen::Vector3d p2 ((*input_)[samples[2]].x, (*input_)[samples[2]].y, (*input_)[samples[2]].z);
+  Eigen::Vector3d p0((*input_)[samples[0]].x, (*input_)[samples[0]].y, (*input_)[samples[0]].z);
+  Eigen::Vector3d p1((*input_)[samples[1]].x, (*input_)[samples[1]].y, (*input_)[samples[1]].z);
+  Eigen::Vector3d p2((*input_)[samples[2]].x, (*input_)[samples[2]].y, (*input_)[samples[2]].z);
+  //Eigen::Vector3d p3((*input_)[samples[3]].x, (*input_)[samples[3]].y, (*input_)[samples[3]].z);
+  //Eigen::Vector3d p4((*input_)[samples[4]].x, (*input_)[samples[4]].y, (*input_)[samples[4]].z);
+  //Eigen::Vector3d p5((*input_)[samples[5]].x, (*input_)[samples[5]].y, (*input_)[samples[5]].z);
 
   // calculate vectors between points
   p1 -= p0;
   p2 -= p0;
+  //p3 -= p0;
+  //p4 -= p0;
+  //p5 -= p0;
 
-  return (p1.dot (p2) < 0.000001);
+  return (p1.dot(p2) < 0.000001);
 }
 
 //////////////////////////////////////////////////////////////////////////
 template <typename PointT> bool
 pcl::SampleConsensusModelEllipse3D<PointT>::computeModelCoefficients (const Indices &samples, Eigen::VectorXf &model_coefficients) const
 {
-  // Need 3 samples
+  // Need 6 samples
   if (samples.size () != sample_size_)
   {
     PCL_ERROR ("[pcl::SampleConsensusModelEllipse3D::computeModelCoefficients] Invalid set of samples given (%lu)!\n", samples.size ());
     return (false);
   }
 
-  model_coefficients.resize (model_size_);   //needing 7 coefficients: centerX, centerY, centerZ, radius, normalX, normalY, normalZ
+  model_coefficients.resize (model_size_);   //needing 9 coefficients: coefA, coefB, coefC, coefD, coefE, coefF, normalX, normalY, normalZ (using conic formula)
 
   Eigen::Vector3d p0 ((*input_)[samples[0]].x, (*input_)[samples[0]].y, (*input_)[samples[0]].z);
   Eigen::Vector3d p1 ((*input_)[samples[1]].x, (*input_)[samples[1]].y, (*input_)[samples[1]].z);
   Eigen::Vector3d p2 ((*input_)[samples[2]].x, (*input_)[samples[2]].y, (*input_)[samples[2]].z);
-
+  Eigen::Vector3d p3 ((*input_)[samples[3]].x, (*input_)[samples[3]].y, (*input_)[samples[3]].z);
+  Eigen::Vector3d p4 ((*input_)[samples[4]].x, (*input_)[samples[4]].y, (*input_)[samples[4]].z);
+  Eigen::Vector3d p5 ((*input_)[samples[5]].x, (*input_)[samples[5]].y, (*input_)[samples[5]].z);
 
   Eigen::Vector3d helper_vec01 = p0 - p1;
   Eigen::Vector3d helper_vec02 = p0 - p2;
@@ -92,30 +103,88 @@ pcl::SampleConsensusModelEllipse3D<PointT>::computeModelCoefficients (const Indi
   Eigen::Vector3d helper_vec20 = p2 - p0;
   Eigen::Vector3d helper_vec21 = p2 - p1;
 
-  Eigen::Vector3d common_helper_vec = helper_vec01.cross (helper_vec12);
-
-  double commonDividend = 2.0 * common_helper_vec.squaredNorm ();
-
-  double alpha = (helper_vec12.squaredNorm () * helper_vec01.dot (helper_vec02)) / commonDividend;
-  double beta =  (helper_vec02.squaredNorm () * helper_vec10.dot (helper_vec12)) / commonDividend;
-  double gamma = (helper_vec01.squaredNorm () * helper_vec20.dot (helper_vec21)) / commonDividend;
-
-  Eigen::Vector3d ellipse_center = alpha * p0 + beta * p1 + gamma * p2;
-
-  Eigen::Vector3d ellipse_radiusVector = ellipse_center - p0;
-  double ellipse_radius = ellipse_radiusVector.norm();
+  Eigen::Vector3d common_helper_vec = helper_vec10.cross (helper_vec12);
   Eigen::Vector3d ellipse_normal = common_helper_vec.normalized(); 
 
-  model_coefficients[0] = static_cast<float>(ellipse_center[0]);
-  model_coefficients[1] = static_cast<float>(ellipse_center[1]);
-  model_coefficients[2] = static_cast<float>(ellipse_center[2]);
-  model_coefficients[3] = static_cast<float>(ellipse_radius);
-  model_coefficients[4] = static_cast<float>(ellipse_normal[0]);
-  model_coefficients[5] = static_cast<float>(ellipse_normal[1]);
-  model_coefficients[6] = static_cast<float>(ellipse_normal[2]);
+  // Coordinate transformation to a local reference frame (2D)
+  Eigen::Vector3d x_axis = helper_vec01.normalized();
+  Eigen::Vector3d z_axis = ellipse_normal;
+  Eigen::Vector3d y_axis = z_axis.cross(x_axis).normalized();
+  
+  // Create the transposed rotation matrix
+  Eigen::Matrix3d Rot;
+  Rot << x_axis(0), x_axis(1), x_axis(2),
+      y_axis(0), y_axis(1), y_axis(2),
+      z_axis(0), z_axis(1), z_axis(2);
+
+  // Convert the points to local coordinates
+  p0 = Rot * (p0 - p0);
+  p1 = Rot * (p1 - p0);
+  p2 = Rot * (p2 - p0);
+  p3 = Rot * (p3 - p0);
+  p4 = Rot * (p4 - p0);
+  p5 = Rot * (p5 - p0);
+
+  // 2D projections only
+  Eigen::VectorXf X(6);
+  X << p0(0), p1(0), p2(0), p3(0), p4(0), p5(0);
+  Eigen::VectorXf Y(6);
+  Y << p0(1), p1(1), p2(1), p3(1), p4(1), p5(1);
+
+  // Design matrix D
+  Eigen::MatrixXd D(6, 6);
+  D << std::pow(X(0),2), X(0)*Y(0), std::pow(Y(0),2), X(0), Y(0), 1.0,
+      std::pow(X(1),2), X(1)*Y(1), std::pow(Y(1),2), X(1), Y(1), 1.0,
+      std::pow(X(2),2), X(2)*Y(2), std::pow(Y(2),2), X(2), Y(2), 1.0,
+      std::pow(X(3),2), X(3)*Y(3), std::pow(Y(3),2), X(3), Y(3), 1.0,
+      std::pow(X(4),2), X(4)*Y(4), std::pow(Y(4),2), X(4), Y(4), 1.0,
+      std::pow(X(5),2), X(5)*Y(5), std::pow(Y(5),2), X(5), Y(5), 1.0;
+
+  // Scatter matrix S
+  Eigen::MatrixXd S = D.transpose() * D;
+
+  // Constraint matrix C
+  Eigen::MatrixXd C = Eigen::MatrixXd::Zero(6,6);
+  C(0, 2) = -2;
+  C(1, 1) = 2;
+  C(2, 0) = -2;
+
+  //// Generalized eigensystem: S*a = lambda*C*a
+  //Eigen::MatrixXf A = Eigen::MatrixXf::Random(4, 4);
+  //Eigen::MatrixXf B = Eigen::MatrixXf::Random(4, 4);
+  //Eigen::GeneralizedEigenSolver<Eigen::MatrixXf> solver;
+  //solver.compute(A, B);
+  //////solver.compute(S, C);
+
+  bool found(false);
+
+
+
+  //model_coefficients[0] = static_cast<float>(ellipse_center[0]);
+  //model_coefficients[1] = static_cast<float>(ellipse_center[1]);
+  //model_coefficients[2] = static_cast<float>(ellipse_center[2]);
+  //model_coefficients[3] = static_cast<float>(ellipse_radius);
+  //model_coefficients[4] = static_cast<float>(ellipse_radius);
+  //model_coefficients[5] = static_cast<float>(ellipse_radius);
+  //model_coefficients[6] = static_cast<float>(ellipse_normal[0]);
+  //model_coefficients[7] = static_cast<float>(ellipse_normal[1]);
+  //model_coefficients[8] = static_cast<float>(ellipse_normal[2]);
+
+  model_coefficients[0] = static_cast<float>(0.0);
+  model_coefficients[1] = static_cast<float>(0.0);
+  model_coefficients[2] = static_cast<float>(0.0);
+  model_coefficients[3] = static_cast<float>(0.0);
+  model_coefficients[4] = static_cast<float>(0.0);
+  model_coefficients[5] = static_cast<float>(0.0);
+  model_coefficients[6] = static_cast<float>(ellipse_normal[0]);
+  model_coefficients[7] = static_cast<float>(ellipse_normal[1]);
+  model_coefficients[8] = static_cast<float>(ellipse_normal[2]);
    
  return (true);
 }
+
+//////////////////////////////////////////////////////////////////////////
+
 
 //////////////////////////////////////////////////////////////////////////
 template <typename PointT> void

@@ -77,13 +77,12 @@ namespace pcl
         * \param[in] cloud the input point cloud dataset
         * \param[in] random if true set the random seed to the current time, else set to 12345 (default: false)
         */
-      SampleConsensusModelEllipse3D (const PointCloudConstPtr &cloud,
-                                    bool random = false) 
+      SampleConsensusModelEllipse3D (const PointCloudConstPtr &cloud, bool random = false) 
         : SampleConsensusModel<PointT> (cloud, random)
       {
         model_name_ = "SampleConsensusModelEllipse3D";
-        sample_size_ = 3;
-        model_size_ = 7;
+        sample_size_ = 6;
+        model_size_ = 9;
       }
 
       /** \brief Constructor for base SampleConsensusModelEllipse3D.
@@ -97,8 +96,8 @@ namespace pcl
         : SampleConsensusModel<PointT> (cloud, indices, random)
       {
         model_name_ = "SampleConsensusModelEllipse3D";
-        sample_size_ = 3;
-        model_size_ = 7;
+        sample_size_ = 6;
+        model_size_ = 9;
       }
       
       /** \brief Empty destructor */
